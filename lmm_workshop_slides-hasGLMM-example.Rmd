@@ -1,0 +1,417 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+# 1. Power Analysis and Estimation in LMMs
+
+## Theory
+
+Power analysis estimates the probability that a statistical test will detect an effect of a given size, assuming it exists. In LMMs, power depends on fixed effects, random effects, and the hierarchical structure of the data (observations nested within higher-level groups - repeated measures within individuals).
+
+## Key Concepts and Formulas
+
+-   **Power**:\
+    $Power = 1 - \beta$\
+    where $\beta$ is the probability of a **Type II error**.
+
+-   **Type I Error (**$\alpha$): Rejecting a true null hypothesis.\
+
+-   **Type II Error (**$\beta$): Failing to reject a false null hypothesis.
+
+| Outcome                  | Null True | Null False |
+|--------------------------|-----------|------------|
+| **Reject** $H_0$         | Type I    | Power      |
+| **Fail to Reject** $H_0$ | Correct   | Type II    |
+
+-   No closed form for LMM power due to random effects; simulation is used.
+
+## Dataset
+
+The `sleepstudy` dataset, available in the `lme4` package, contains data from a study on the effects of sleep deprivation on cognitive performance. It includes repeated reaction time measurements for 18 subjects across 10 days of sleep restriction. Each subject's reaction time is recorded along with the number of days of sleep deprivation.
+
+You can access it directly in R:
+
+```{r}
+data(sleepstudy, package = "lme4")
+```
+
+## R Code and Output
+
+```{r}
+library(lme4)
+library(simr)
+
+# Load and inspect data
+data(sleepstudy)
+head(sleepstudy)
+```
+
+```{r}
+summary(sleepstudy)
+```
+
+## Dataset
+
+The `sleepstudy` dataset, available in the `lme4` package, contains data from a study on the effects of sleep deprivation on cognitive performance. It includes repeated reaction time measurements for 18 subjects across 10 days of sleep restriction. Each subject's reaction time is recorded along with the number of days of sleep deprivation.
+
+## Exploratory Data Analysis
+
+```{r}
+str(sleepstudy)
+```
+
+```{r}
+table(sleepstudy$Subject)
+```
+
+```{r}
+hist(sleepstudy$Reaction, main = "Histogram of Reaction Time")
+```
+
+```{r}
+boxplot(Reaction ~ Subject, data = sleepstudy, las = 2)
+```
+
+## Simulating and Estimating Power
+
+```{r}
+model <- lmer(Reaction ~ Days + (1 | Subject), data = sleepstudy)
+power_result <- powerSim(model, fixed("Days"), nsim = 50)
+power_result
+```
+
+## Interpretation
+
+The `powerSim` function estimates the proportion of simulations where the effect of `Days` is detected. If power \< 0.8, consider increasing subjects or measurement occasions.
+
+------------------------------------------------------------------------
+
+# 2. Linear Mixed Effects Modelling
+
+## Theory
+
+LMMs extend linear models to handle grouped or clustered data by including random effects. This allows modeling variation within and between groups.
+
+## General Model Formula
+
+$$
+y = X\beta + Zb + \varepsilon
+$$ Where: - $y$: response\
+- $X\beta$: fixed effects\
+- $Zb$: random effects, $b \sim N(0, \sigma^2_b)$\
+- $\varepsilon \sim N(0, \sigma^2)$
+
+## Example with Three Predictors
+
+If we have three predictors: $x_1$ (Days), $x_2$ (Group), $x_3$ (Gender), and random intercepts for Subject:
+
+$$
+y = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \beta_3 x_3 + Zb + \varepsilon
+$$
+
+### Matrix Representation
+
+-   $X = \begin{bmatrix}1 & x_{11} & x_{21} & x_{31} \\ 1 & x_{12} & x_{22} & x_{32} \\ \vdots & \vdots & \vdots & \vdots\end{bmatrix}$\
+-   $\beta = \begin{bmatrix}\beta_0 \\ \beta_1 \\ \beta_2 \\ \beta_3\end{bmatrix}$\
+-   $Z = \begin{bmatrix}1 & 0 & 0 & \dots \\ 0 & 1 & 0 & \dots \\ 0 & 0 & 1 & \dots \\ \vdots & \vdots & \vdots & \ddots\end{bmatrix}$ — mapping observations to random effects per subject\
+-   $b = \begin{bmatrix}b_1 \\ b_2 \\ \vdots \\ b_q\end{bmatrix}$, $b \sim N(0, \sigma_b^2 I)$\
+-   $\varepsilon = \begin{bmatrix}\varepsilon_1 \\ \varepsilon_2 \\ \vdots \\ \varepsilon_n\end{bmatrix}$, $\varepsilon \sim N(0, \sigma^2 I)$
+
+## R Code Example
+
+```{r}
+model <- lmer(Reaction ~ Days + (1 | Subject), data = sleepstudy)
+summary(model)
+```
+
+
+## Interpretation
+
+-   `Days` has a fixed effect of \~10.47 ms increase in reaction time per day of sleep deprivation.
+-   The random intercept variance suggests individual differences between subjects.
+
+------------------------------------------------------------------------
+
+# 3. Interpreting Factor Interactions in LMMs
+
+## Theory
+
+An interaction occurs when the effect of one factor depends on the level of another factor. In LMMs, interactions can involve fixed and random effects.
+
+## Model with Interaction
+
+$$
+y = \beta_0 + \beta_1 A + \beta_2 B + \beta_3 A \times B + Zb + \varepsilon
+$$
+
+## R Code Example
+
+```{r}
+sleepstudy$Group <- factor(rep(c("A", "B"), each = 90))
+model_interaction <- lmer(Reaction ~ Days * Group + (1 | Subject), data = sleepstudy)
+summary(model_interaction)
+```
+
+```{r}
+library(sjPlot)
+plot_model(model_interaction, type = "int")
+```
+
+## Interpretation
+
+-   `Days:GroupB` is not statistically significant, suggesting the slope of Days on Reaction does not differ much between groups.
+-   Still useful to visualize interactions for pattern discovery.
+-   It is possible that the sample size or variation within groups is not sufficient to detect an interaction, or that the true interaction effect is small.
+-   Including interaction terms is valuable in exploratory analysis, especially when theoretical expectations suggest effect modification across subgroups.
+
+## Dataset Orthodont
+
+The `Orthodont` dataset contains longitudinal data on the distance (in mm) from the pituitary to the pterygomaxillary fissure in children. Variables include:
+
+-   `distance`: outcome variable (continuous)
+-   `age`: age of child (continuous predictor)
+-   `Sex`: sex of child (Male/Female)
+-   `Subject`: identifier for repeated measures (random effect)
+
+```{r}
+library(nlme)
+data(Orthodont)
+head(Orthodont)
+summary(Orthodont)
+```
+
+## Matrix Notation and Model Formulation
+
+We fit a linear mixed model with an interaction between age and sex. The general form of the model is:
+
+$$
+y = X\beta + Zb + \varepsilon
+$$
+
+Where:
+
+-   $y$: response vector (`distance`)
+-   $X$: fixed effects design matrix (intercept, age, sex, age:sex)
+-   $\beta$: fixed effects vector
+-   $Z$: random effects design matrix (subject-specific intercept and slope)
+-   $b \sim \mathcal{N}(0, \sigma_b^2 I)$: random effects
+-   $\varepsilon \sim \mathcal{N}(0, \sigma^2 I)$: residual errors
+
+### Dimensions:
+
+-   $X \in \mathbb{R}^{108 \times 4}$ (108 observations, 4 fixed effects: intercept, age, sex, age × sex)
+-   $\beta \in \mathbb{R}^{4 \times 1}$
+-   $Z \in \mathbb{R}^{108 \times 27}$ (27 subjects, each with intercept and slope for age)
+-   $b \in \mathbb{R}^{27 \times 2}$
+
+## Fit the Linear Mixed Model
+
+```{r}
+library(lme4)
+orthodont_lmm <- lmer(distance ~ age * Sex + (age | Subject), data = Orthodont)
+summary(orthodont_lmm)
+```
+
+## Interpretation of Fixed Effects
+
+-   `age`: baseline rate of change in distance for females
+-   `SexMale`: intercept difference between males and females
+-   `age:SexMale`: difference in growth rate (slope) between sexes
+
+A significant interaction term indicates that the rate of distance growth differs between boys and girls.
+
+## Power Analysis for Interaction
+
+Estimate power for detecting the interaction term `age:SexMale` using the `simr` package.
+
+```{r}
+library(simr)
+# Extend model for power simulation
+orthodont_sim <- extend(orthodont_lmm, along = "Subject", n = 40)
+
+# Estimate power for interaction effect
+power_result <- powerSim(orthodont_sim, fixed("age:SexMale"), nsim = 50)
+power_result
+```
+
+## Model Diagnostics
+
+```{r}
+library(DHARMa)
+sim_res <- simulateResiduals(fittedModel = orthodont_lmm)
+plot(sim_res)
+```
+
+These residual plots help evaluate the fit of the model. No major deviations from uniformity or patterns in residuals indicate a good model fit.
+
+## Extended Example: Advanced Dataset
+
+To deepen understanding of mixed models, we now use a more complex dataset: `cbpp` (Contagious Bovine Pleuropneumonia) from the `lme4` package. This dataset includes binomial outcomes (number of infected animals) across herds and time periods.
+
+### Dataset Description
+
+The `cbpp` dataset contains data on the incidence of a bovine disease, with the number of infected animals recorded out of a total at risk, for multiple herds over time.
+
+```{r}
+library(lme4)
+data(cbpp)
+head(cbpp)
+```
+
+The `cbpp` dataset includes the variables: `incidence` (number of infected cattle), `size` (total herd size), `period` (time period), and `herd` (herd ID). It is useful for modeling disease progression over time across different herds.
+
+```{r}
+summary(cbpp)
+```
+
+### Why Not Use a Linear Mixed Model?
+
+The outcome variable in `cbpp` represents counts of infected animals out of a total at risk, which are bounded and discrete. Linear mixed models assume normally distributed residuals and continuous outcomes, which are not appropriate for count or proportion data. Using LMMs in this context could lead to invalid inferences and predictions outside the $$0,1$$ probability range.
+
+### Why Use a GLMM?
+
+Generalized Linear Mixed Models extend LMMs by allowing non-normal response distributions and link functions. In this case, a **binomial distribution** and **logit link** are suitable to model the probability of infection. The GLMM framework lets us account for both fixed effects (e.g., time period) and random effects (e.g., herd-level differences).
+
+### GLMM Theory and Matrix Representation
+
+We model the probability of infection in herd $j$ during period $i$ as:
+
+$$
+\text{logit}(\mu_{ij}) = \beta_0 + \beta_1 \cdot \text{period2}_i + \beta_2 \cdot \text{period3}_i + \beta_3 \cdot \text{period4}_i + b_j
+$$
+
+Where: - $\mu_{ij}$ is the expected probability of infection (i.e., $\text{incidence} / \text{size}$) - $\beta_0$ is the intercept (baseline log-odds of infection for period 1) - $\beta_1$, $\beta_2$, $\beta_3$ are the fixed effects for the other periods (dummy-coded) - $b_j \sim \mathcal{N}(0, \sigma^2_b)$ is the random intercept for herd $j$
+
+The outcome $y_{ij} \sim \text{Binomial}(n_{ij}, \mu_{ij})$, where: - $y_{ij}$: number of infected cattle (incidence) - $n_{ij}$: total herd size
+
+------------------------------------------------------------------------
+
+### Matrix Representation
+
+Let: - $N = 56$: total number of observations (14 herds × 4 periods) - $P = 4$: number of fixed effects (intercept + 3 period indicators) - $J = 15$: number of herds (random intercepts)
+
+#### Fixed Effects Design Matrix $X \in \mathbb{R}^{56 \times 4}$
+
+$$
+X = 
+\begin{bmatrix}
+1 & 0 & 0 & 0 \\\\
+1 & 1 & 0 & 0 \\\\
+1 & 0 & 1 & 0 \\\\
+\vdots & \vdots & \vdots & \vdots \\\\
+1 & 0 & 0 & 1 \\\\
+\end{bmatrix}
+$$
+
+#### Fixed Effects Coefficient Vector $\beta \in \mathbb{R}^4$
+
+$$
+\beta = 
+\begin{bmatrix}
+\beta_0 \\\\
+\beta_1 \\\\
+\beta_2 \\\\
+\beta_3 \\\\
+\end{bmatrix}
+$$
+
+#### Random Effects Design Matrix $Z \in \mathbb{R}^{56 \times 15}$
+
+Each row maps an observation to one of 15 herds via one-hot encoding.
+
+#### Random Effects Vector $b \sim \mathcal{N}(0, \sigma_b^2 I)$
+
+$$
+b = 
+\begin{bmatrix}
+b_1 \\\\
+b_2 \\\\
+\vdots \\\\
+b_{15} \\\\
+\end{bmatrix}
+$$
+
+#### Linear Predictor
+
+$$
+\eta = X\beta + Zb
+$$
+
+#### Link Function
+
+$$
+\mu = \text{logit}^{-1}(\eta) = \frac{1}{1 + e^{-\eta}}
+$$
+
+#### Outcome Distribution
+
+$$
+y_i \sim \text{Binomial}(n_i, \mu_i)
+$$
+
+------------------------------------------------------------------------
+
+This block is ready to paste into your Quarto `.qmd` document. Let me know if you want to include an annotated visual of $X$, $Z$, or $\beta$.
+
+### Fit a Generalized Linear Mixed Model (GLMM)
+
+We fit a GLMM with a binomial family to account for the number of infected animals out of those at risk.
+
+```{r}
+model_cbpp <- glmer(cbind(incidence, size - incidence) ~ period + (1 | herd),
+                    data = cbpp, family = binomial)
+summary(model_cbpp)
+```
+
+### Interpretation
+
+-   `period` represents time periods in the study. We can assess whether incidence changes over time.
+-   The random intercept by `herd` accounts for baseline differences in infection risk across herds.
+-   The binomial link (logit) models probability of infection per animal.
+
+### Simulating and Estimating Power
+
+We can use the `simr` package to estimate power for GLMMs by simulating repeated experiments.
+
+```{r}
+library(simr)
+# Extend model for power simulation
+cbpp_ext <- extend(model_cbpp, along = "herd", n = 40)
+# Run power simulation for the fixed effect 'period'
+power_result_cbpp <- powerSim(cbpp_ext, fixed("period2"), nsim = 50)
+power_result_cbpp
+```
+
+This will return the proportion of simulations in which the effect of `period2` is detected. You can repeat the simulation for other period levels as well.
+
+Note: Power estimation for GLMMs is computationally intensive and depends heavily on model structure and simulation size.
+
+### Model Diagnostics
+
+We can inspect residuals and fitted values to check model assumptions. While traditional residual plots are less interpretable for binomial GLMMs, binned residual plots and fitted vs. observed comparisons can help.
+
+```{r}
+# Load diagnostic tools
+library(DHARMa)
+sim_res <- simulateResiduals(fittedModel = model_cbpp)
+plot(sim_res)
+```
+
+This generates simulation-based scaled residual plots, useful for identifying overdispersion, zero inflation, and other potential model issues.
+
+-   Ideally, residuals should be uniformly distributed and show no obvious patterns.
+-   If overdispersion is detected, consider alternative random structures or zero-inflated models.
+
+This example demonstrates how GLMMs can handle grouped binary outcomes with appropriate link functions and random structure.
+
+------------------------------------------------------------------------
+
+# References
+
+-   `lme4`: [[https://cran.r-project.org/web/packages/lme4/\\\\](https://cran.r-project.org/web/packages/lme4/){.uri}](%5Bhttps://cran.r-project.org/web/packages/lme4/\%5D(https://cran.r-project.org/web/packages/lme4/)%7B.uri%7D){.uri}
+-   `simr`: [[https://cran.r-project.org/web/packages/simr/\\\\](https://cran.r-project.org/web/packages/simr/){.uri}](%5Bhttps://cran.r-project.org/web/packages/simr/\%5D(https://cran.r-project.org/web/packages/simr/)%7B.uri%7D){.uri}
+-   `sjPlot`: [[https://strengejacke.github.io/sjPlot/\\\\](https://strengejacke.github.io/sjPlot/){.uri}](%5Bhttps://strengejacke.github.io/sjPlot/\%5D(https://strengejacke.github.io/sjPlot/)%7B.uri%7D){.uri}
+-   `emmeans`: <https://cran.r-project.org/web/packages/emmeans/>
